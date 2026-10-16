@@ -146,7 +146,21 @@ export function DashboardShell({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [browserNotificationPermission, setBrowserNotificationPermission] = useState<NotificationPermission | "unsupported">("unsupported");
+  const notificationIdsRef = useRef(new Set<string>());
+  const notificationHydratedRef = useRef(false);
   const optimisticReadRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setBrowserNotificationPermission(window.Notification.permission);
+    }
+  }, []);
+
+  async function enableBrowserNotifications() {
+    if (!(typeof window !== "undefined" && "Notification" in window)) return;
+    setBrowserNotificationPermission(await window.Notification.requestPermission());
+  }
 
   useEffect(() => {
     let active = true;
@@ -161,6 +175,14 @@ export function DashboardShell({
         const response = await fetch("/api/notifications", { cache: "no-store", signal: controller?.signal });
         const data = await response.json();
         if (active && response.ok && data.success && Array.isArray(data.notifications)) {
+          const nextNotifications = data.notifications as { id: string; title: string; message: string; read: boolean }[];
+          if (notificationHydratedRef.current && browserNotificationPermission === "granted") {
+            nextNotifications.filter((item) => !item.read && !notificationIdsRef.current.has(item.id)).slice(0, 3).forEach((item) => {
+              new window.Notification(item.title, { body: item.message, tag: item.id });
+            });
+          }
+          notificationIdsRef.current = new Set(nextNotifications.map((item) => item.id));
+          notificationHydratedRef.current = true;
           setLiveNotifications(data.notifications.map((item: { id: string; read: boolean }) => ({
             ...item,
             read: item.read || optimisticReadRef.current.has(item.id),
@@ -186,7 +208,7 @@ export function DashboardShell({
       document.removeEventListener("visibilitychange", handleVisibility);
       controller?.abort();
     };
-  }, [currentUser]);
+  }, [currentUser, browserNotificationPermission]);
 
   const notifButtonRef = useRef<HTMLButtonElement>(null);
   const userMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -228,7 +250,7 @@ export function DashboardShell({
         ${isCollapsed ? "lg:w-[76px]" : "lg:w-64"} w-72`}
       >
         {/* Brand Logo Header */}
-        <div className={`flex items-center ${isCollapsed ? "lg:justify-center lg:flex-col lg:gap-2 lg:py-3 lg:px-2 justify-between px-5 py-4" : "justify-between px-5 py-4"} border-b border-white/10 min-h-[56px] transition-all`}>
+        <div className={`flex items-center ${isCollapsed ? "lg:justify-center lg:flex-col lg:gap-2 lg:py-3 lg:px-2 justify-between px-5 py-4" : "justify-between px-5 py-4"} border-b border-white/10 min-h-[64px] transition-all`}>
           <a href="/" className="flex items-center gap-2.5">
             <img
               src={isCollapsed ? "/brand/icon-green.svg" : "/brand/Logo1.svg"}
@@ -377,7 +399,7 @@ export function DashboardShell({
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
         {/* Top Header */}
-        <header className="safe-area-top flex min-w-0 items-center justify-between gap-3 px-4 sm:px-5 lg:px-6 py-3 border-b border-white/10 bg-enrollaa-navy min-h-[56px]">
+        <header className="safe-area-top flex min-w-0 items-center justify-between gap-3 px-4 sm:px-5 lg:px-6 py-4 border-b border-white/10 bg-enrollaa-navy min-h-[64px]">
           <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -457,6 +479,11 @@ export function DashboardShell({
                         </span>
                       )}
                     </div>
+                    {browserNotificationPermission === "default" && (
+                      <button type="button" onClick={() => void enableBrowserNotifications()} className="text-[10px] text-enrollaa-green hover:underline">
+                        Enable browser alerts
+                      </button>
+                    )}
                     {unreadCount > 0 && (
                       <button
                         onClick={() => {
