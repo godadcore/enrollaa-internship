@@ -49,11 +49,14 @@ export function AppProvider({ children, trustedIdentity }: { children: React.Rea
       return { success: false, error: "Please provide both your registered email and password." };
     }
 
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: cleanEmail, password }),
+        signal: controller.signal,
       });
       const data = await res.json();
       if (!data.success) {
@@ -68,6 +71,8 @@ export function AppProvider({ children, trustedIdentity }: { children: React.Rea
         success: false,
         error: "Unable to sign in with the server. Please check your connection and try again.",
       };
+    } finally {
+      window.clearTimeout(timeout);
     }
   };
 

@@ -36,6 +36,7 @@ body,
 
 html {
   scroll-behavior: smooth;
+  background: var(--enrollaa-navy);
 }
 
 body {
@@ -46,7 +47,15 @@ body {
   color: #FFFFFF;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* Mobile browser chrome and notches change the visual viewport. Keep app
+   surfaces inside the safe area without creating page-level overflow. */
+.safe-area-top { padding-top: env(safe-area-inset-top); }
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-area-inline { padding-inline: max(0px, env(safe-area-inset-left)) max(0px, env(safe-area-inset-right)); }
 
 /* Overlay stacking: 40 backdrop, 55 modal, 56 portaled floating menus (above modals), 60 toast.
    Floating menus must portal to document.body so dashboard overflow does not clip them. */
@@ -278,13 +287,24 @@ h1, h2, h3, h4, h5, h6 {
 
   .modal-overlay {
     @apply fixed inset-0 z-[55] overflow-hidden bg-black/80 backdrop-blur-md p-4 sm:p-6 flex min-h-[100dvh] items-center justify-center;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
     background-color: rgba(0, 0, 0, 0.76);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
   }
 
   .modal-content {
-    @apply bg-enrollaa-navy border border-white/[0.08] rounded-md shadow-modal-glow max-w-lg w-full max-h-[calc(100vh-3rem)] overflow-y-auto my-auto;
+    @apply bg-enrollaa-navy border border-white/[0.08] rounded-md shadow-modal-glow max-w-lg w-full max-h-[calc(100dvh-3rem)] overflow-y-auto my-auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
   }
 }
 

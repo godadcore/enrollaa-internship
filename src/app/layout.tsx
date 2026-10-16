@@ -29,17 +29,15 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/light%20mode%20app%20and%20share%20icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.svg", type: "image/svg+xml" },
     ],
     shortcut: "/light%20mode%20app%20and%20share%20icon.svg",
-    apple: "/light%20mode%20app%20and%20share%20icon.svg",
+    apple: "/brand/Light%20mode%20App%20And%20Socials%20Icon.png",
   },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   themeColor: "#0F0040",
 };
 

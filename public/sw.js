@@ -1,9 +1,9 @@
 // Enrollaa Internship PWA Service Worker
-const CACHE_NAME = "enrollaa-intern-v2";
+const CACHE_NAME = "enrollaa-intern-v3";
 const STATIC_ASSETS = [
   "/manifest.json",
-  "/icons/icon-192x192.png",
-  "/icons/icon-512x512.png"
+  "/light%20mode%20app%20and%20share%20icon.svg",
+  "/brand/Light%20mode%20App%20And%20Socials%20Icon.png"
 ];
 
 self.addEventListener("install", (event) => {

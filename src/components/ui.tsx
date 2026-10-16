@@ -146,25 +146,47 @@ export function DashboardShell({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const optimisticReadRef = useRef(new Set<string>());
 
   useEffect(() => {
     let active = true;
-    const loadNotifications = async () => {
+    let request: Promise<void> | null = null;
+    let controller: AbortController | null = null;
+    const refreshNotifications = async () => {
+      if (!active || !currentUser || document.visibilityState !== "visible") return;
+      if (request) return request;
+      controller = new AbortController();
+      request = (async () => {
       try {
-        const response = await fetch("/api/notifications", { cache: "no-store" });
+        const response = await fetch("/api/notifications", { cache: "no-store", signal: controller?.signal });
         const data = await response.json();
-        if (active && response.ok && data.success) setLiveNotifications(data.notifications);
+        if (active && response.ok && data.success && Array.isArray(data.notifications)) {
+          setLiveNotifications(data.notifications.map((item: { id: string; read: boolean }) => ({
+            ...item,
+            read: item.read || optimisticReadRef.current.has(item.id),
+          })));
+        }
       } catch {
         // Keep the last confirmed notification state during transient outages.
+      } finally {
+        request = null;
       }
+      })();
+      return request;
     };
-    void loadNotifications();
-    const timer = window.setInterval(() => void loadNotifications(), 30_000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void refreshNotifications();
+    };
+    void refreshNotifications();
+    const timer = window.setInterval(() => void refreshNotifications(), 30_000);
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       active = false;
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      controller?.abort();
     };
-  }, []);
+  }, [currentUser]);
 
   const notifButtonRef = useRef<HTMLButtonElement>(null);
   const userMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -189,7 +211,7 @@ export function DashboardShell({
   const userAvatar = getStableAvatar(currentUser);
 
   return (
-    <div className="flex h-screen min-w-0 overflow-hidden bg-enrollaa-navy">
+    <div className="flex h-[100dvh] min-w-0 overflow-hidden bg-enrollaa-navy safe-area-inline">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -355,7 +377,7 @@ export function DashboardShell({
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
         {/* Top Header */}
-        <header className="flex min-w-0 items-center justify-between gap-3 px-4 sm:px-5 lg:px-6 py-3 border-b border-white/10 bg-enrollaa-navy min-h-[56px]">
+        <header className="safe-area-top flex min-w-0 items-center justify-between gap-3 px-4 sm:px-5 lg:px-6 py-3 border-b border-white/10 bg-enrollaa-navy min-h-[56px]">
           <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -380,6 +402,17 @@ export function DashboardShell({
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => { setUserMenuOpen(false); setNotifOpen(true); }}
+                className="inline-flex max-w-[min(38vw,15rem)] items-center gap-2 rounded-full border border-enrollaa-green/25 bg-enrollaa-green/[0.08] px-2.5 py-1.5 text-left text-[10px] text-enrollaa-green transition-colors hover:bg-enrollaa-green/[0.14] sm:max-w-[15rem] sm:px-3"
+                aria-label={`Open latest notification: ${liveNotifications.find((item) => !item.read)?.title || "New notification"}`}
+              >
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-enrollaa-green" aria-hidden="true" />
+                <span className="truncate">{liveNotifications.find((item) => !item.read)?.title || "New update"}</span>
+              </button>
+            )}
             {/* Role Badge */}
             <span className={`${getRoleBadgeColor(currentUser.role)} text-[10px] font-heading font-semibold uppercase tracking-wider px-2.5 py-1 rounded-sm hidden sm:inline-flex`}>
               {getRoleLabel(currentUser.role)}
@@ -427,7 +460,12 @@ export function DashboardShell({
                     {unreadCount > 0 && (
                       <button
                         onClick={() => {
-                          void fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) }).then(() => {
+                          liveNotifications.forEach((item) => optimisticReadRef.current.add(item.id));
+                          void fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) }).then((response) => {
+                            if (!response.ok) {
+                              liveNotifications.forEach((item) => optimisticReadRef.current.delete(item.id));
+                              return;
+                            }
                             setLiveNotifications((current) => current.map((item) => ({ ...item, read: true })));
                           });
                         }}
@@ -448,7 +486,10 @@ export function DashboardShell({
                         <button
                           key={notif.id}
                           onClick={() => {
-                            void fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: notif.id }) });
+                            optimisticReadRef.current.add(notif.id);
+                            void fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: notif.id }) }).then((response) => {
+                              if (!response.ok) optimisticReadRef.current.delete(notif.id);
+                            });
                             setLiveNotifications((current) => current.map((item) => (item.id === notif.id ? { ...item, read: true } : item)));
                             setNotifOpen(false);
                           }}

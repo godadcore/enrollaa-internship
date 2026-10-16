@@ -11,11 +11,24 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("login rejects invalid credentials", async ({ page }) => {
+  await page.route("**/api/auth/login", async (route) => {
+    await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ success: false, error: "Invalid email or password." }) });
+  });
   await page.locator("#login-email").fill("invalid@example.com");
   await page.locator("#login-password").fill("invalid-password");
   await expect(page.locator("#login-email")).toHaveValue("invalid@example.com");
   await page.getByRole("button", { name: /sign in/i }).click();
   await expect(page.getByText(/invalid email or password|invalid credentials|unable to sign in|incorrect/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled();
+});
+
+test("login recovers from a network failure", async ({ page }) => {
+  await page.route("**/api/auth/login", (route) => route.abort("failed"));
+  await page.locator("#login-email").fill("network@example.com");
+  await page.locator("#login-password").fill("test-password");
+  await page.getByRole("button", { name: /sign in/i }).click();
+  await expect(page.getByText(/unable to sign in with the server/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled();
 });
 
 test("login page remains usable at supported viewport widths", async ({ page }) => {
