@@ -1,0 +1,418 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Syne:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-heading: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --enrollaa-navy: #0F0040;
+  --enrollaa-navy-light: #151152;
+  --enrollaa-green: #37E915;
+  --enrollaa-green-hover: #2FD110;
+  --enrollaa-dark: #0D1117;
+  --enrollaa-purple: #7C3AED;
+  --enrollaa-amber: #F59E0B;
+  --enrollaa-red: #EF4444;
+  --enrollaa-muted-light: #A5ADCF;
+  --enrollaa-muted-dark: #5C6A8D;
+}
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  background-color: var(--enrollaa-navy);
+  color: #FFFFFF;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Overlay stacking: 40 backdrop, 55 modal, 56 portaled floating menus (above modals), 60 toast.
+   Floating menus must portal to document.body so dashboard overflow does not clip them. */
+
+/* Brand-aligned surfaces. These hex values predate the navy tokens. */
+body [class*="bg-[#111333]"],
+body [class*="bg-[#0E1322]"],
+body [class*="bg-[#0F1424]"],
+body [class*="bg-[#0E1424]"] { background-color: var(--enrollaa-navy) !important; }
+body [class*="bg-[#090C15]"] { background-color: #100640 !important; }
+
+img, video, canvas, svg { max-width: 100%; }
+
+/* Shared responsive safeguards.  These prevent content from escaping a grid or
+   flex parent while preserving normal wrapping instead of concealing overflow. */
+.min-w-0, .glass-card, main, header, section, article { min-width: 0; }
+.break-anywhere { overflow-wrap: anywhere; word-break: break-word; }
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* Scrollbar Styling — vertical only, subtle neutral */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* Utility: completely hide scrollbar (for sidebars, nav, etc.) */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Selection */
+::selection {
+  background: rgba(55, 233, 21, 0.25);
+  color: #FFFFFF;
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--enrollaa-green);
+  outline-offset: 2px;
+}
+
+/* Utility animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(55, 233, 21, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(55, 233, 21, 0.5); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.4s ease-out forwards;
+}
+
+/* Stagger animations */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+
+/* Card glass effect */
+@layer components {
+  .glass-card {
+    @apply bg-enrollaa-navy-card backdrop-blur-lg border border-white/[0.06] rounded-md;
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 hover:border-enrollaa-green/20 hover:shadow-green-glow;
+  }
+
+  .btn-primary {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-enrollaa-green text-enrollaa-navy font-heading font-bold text-sm rounded-sm
+    transition-all duration-300 hover:bg-enrollaa-green-hover hover:shadow-green-glow active:scale-[0.97];
+  }
+
+  .btn-secondary {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 px-4 sm:px-5 py-2.5 border border-enrollaa-green/30 text-enrollaa-green font-heading font-bold text-sm rounded-sm
+    transition-all duration-300 hover:bg-enrollaa-green/10 hover:border-enrollaa-green/60 active:scale-[0.97];
+  }
+
+  .btn-danger {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-enrollaa-red/20 text-enrollaa-red border border-enrollaa-red/30 font-heading font-bold text-sm rounded-sm
+    transition-all duration-300 hover:bg-enrollaa-red/30 active:scale-[0.97];
+  }
+
+  .btn-ghost {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 px-3 py-2 text-enrollaa-muted-light font-body text-sm rounded-sm
+    transition-all duration-200 hover:bg-white/5 hover:text-white;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 bg-enrollaa-dark-input border border-white/[0.08] rounded-sm text-white placeholder:text-enrollaa-muted-dark
+    font-body text-sm transition-all duration-200 focus:border-enrollaa-green/40 focus:ring-1 focus:ring-enrollaa-green/20 focus:outline-none;
+  }
+
+  .select-field {
+    @apply w-full px-4 py-3 bg-enrollaa-dark-input border border-white/[0.08] rounded-sm text-white
+    font-body text-sm transition-all duration-200 focus:border-enrollaa-green/40 focus:ring-1 focus:ring-enrollaa-green/20 focus:outline-none appearance-none cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2337E915' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+  }
+
+  .select-field option {
+    background-color: #100640;
+    color: #FFFFFF;
+    padding: 8px 12px;
+  }
+
+  .label-text {
+    @apply block text-xs font-heading font-semibold text-enrollaa-muted-light uppercase tracking-wider mb-1.5;
+  }
+
+  .stat-value {
+    @apply font-heading text-3xl font-bold text-white;
+  }
+
+  .stat-label {
+    @apply font-body text-xs text-enrollaa-muted-light uppercase tracking-wider mt-1;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-pill text-xs font-heading font-semibold;
+  }
+
+  .badge-green {
+    @apply badge bg-enrollaa-green/15 text-enrollaa-green border border-enrollaa-green/20;
+  }
+
+  .badge-amber {
+    @apply badge bg-enrollaa-amber/15 text-enrollaa-amber border border-enrollaa-amber/20;
+  }
+
+  .badge-red {
+    @apply badge bg-enrollaa-red/15 text-enrollaa-red border border-enrollaa-red/20;
+  }
+
+  .badge-purple {
+    @apply badge bg-enrollaa-purple/15 text-enrollaa-purple border border-enrollaa-purple/20;
+  }
+
+  .badge-muted {
+    @apply badge bg-white/5 text-enrollaa-muted-light border border-white/10;
+  }
+
+  .table-header {
+    @apply text-xs font-heading font-semibold uppercase tracking-wider text-enrollaa-muted-light px-4 py-3 text-left;
+  }
+
+  .table-cell {
+    @apply px-4 py-3 text-sm font-body text-white/80 border-t border-white/[0.04];
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-sm text-sm font-body text-enrollaa-muted-light
+    transition-all duration-200 hover:bg-white/5 hover:text-white cursor-pointer;
+  }
+
+  .sidebar-link-active {
+    @apply sidebar-link bg-enrollaa-green/10 text-enrollaa-green border-l-2 border-enrollaa-green;
+  }
+
+  .section-title {
+    @apply font-heading text-lg font-bold text-white mb-4;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 z-[55] overflow-hidden bg-black/80 backdrop-blur-md p-4 sm:p-6 flex min-h-[100dvh] items-center justify-center;
+    background-color: rgba(0, 0, 0, 0.76);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+
+  .modal-content {
+    @apply bg-enrollaa-navy border border-white/[0.08] rounded-md shadow-modal-glow max-w-lg w-full max-h-[calc(100vh-3rem)] overflow-y-auto my-auto;
+  }
+}
+
+
+
+@media (max-width: 639px) {
+  .btn-primary, .btn-secondary, .btn-danger { max-width: 100%; white-space: normal; text-align: center; }
+  .mobile-stack { flex-direction: column; align-items: stretch; }
+  .mobile-stack > * { width: 100%; }
+
+  /* DataTable switches to labelled records below the small breakpoint. */
+  .responsive-table, .responsive-table tbody, .responsive-table tr, .responsive-table td { display: block; width: 100%; }
+  .responsive-table thead { display: none; }
+  .responsive-table tbody {
+    display: grid;
+    gap: .75rem;
+    padding: .75rem;
+  }
+  .responsive-table tr {
+    padding: .35rem 0;
+    background: var(--enrollaa-navy);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 8px;
+  }
+  .responsive-table td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 42%) minmax(0, 1fr);
+    gap: .75rem;
+    padding: .5rem 1rem;
+    border: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+  .responsive-table td::before {
+    content: attr(aria-label);
+    color: var(--enrollaa-muted-light);
+    font-family: var(--font-heading);
+    font-size: .65rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+  .responsive-table td > * { justify-self: end; max-width: 100%; }
+  .responsive-table td[aria-label="Actions"] {
+    display: block;
+    text-align: left;
+  }
+  .responsive-table td[aria-label="Actions"]::before {
+    display: block;
+    margin-bottom: .35rem;
+  }
+  .responsive-table td[aria-label="Actions"] > div {
+    display: flex;
+    justify-content: flex-start;
+    gap: .375rem;
+  }
+  .responsive-table .truncate,
+  .responsive-table [class*="max-w-"] {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  /* Metadata pills should remain compact—even when their department name is long. */
+  .responsive-table .badge,
+  .responsive-table .badge-green,
+  .responsive-table .badge-amber,
+  .responsive-table .badge-red,
+  .responsive-table .badge-purple,
+  .responsive-table .badge-muted {
+    display: inline-flex;
+    max-width: 100%;
+    overflow: visible;
+    white-space: normal;
+    text-align: right;
+  }
+  .responsive-table td > * { min-width: 0; text-align: right; }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Custom Date Input & Calendar Styling                               */
+/* ------------------------------------------------------------------ */
+input[type="date"],
+input[type="datetime-local"] {
+  color-scheme: dark;
+  position: relative;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.6) sepia(1) saturate(5) hue-rotate(80deg);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* Make native select options dark */
+select option {
+  background-color: #100640;
+  color: #FFFFFF;
+}
+
+/* File input styling */
+input[type="file"] {
+  color-scheme: dark;
+}
+
+input[type="file"]::file-selector-button {
+  background: rgba(55, 233, 21, 0.15);
+  color: #37E915;
+  border: 1px solid rgba(55, 233, 21, 0.3);
+  border-radius: 4px;
+  padding: 6px 16px;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 12px;
+  transition: all 0.2s;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: rgba(55, 233, 21, 0.25);
+  border-color: rgba(55, 233, 21, 0.5);
+}

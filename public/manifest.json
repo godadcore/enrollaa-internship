@@ -1,0 +1,25 @@
+{
+  "name": "Enrollaa Internship Management System",
+  "short_name": "Enrollaa Intern",
+  "description": "Production operational portal for Enrollaa internship lifecycle, attendance, tasks, and giveaways.",
+  "start_url": "/portal",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F0040",
+  "theme_color": "#0F0040",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
