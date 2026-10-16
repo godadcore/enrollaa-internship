@@ -502,6 +502,12 @@ export function DashboardShell({
                       </button>
                     )}
                   </div>
+                  <div className="border-b border-white/10 px-4 py-2 text-[10px] leading-relaxed text-enrollaa-muted-light" role="status" aria-live="polite">
+                    {browserNotificationPermission === "default" && "Browser alerts are off. Enable them to receive alerts for new updates while this app is open."}
+                    {browserNotificationPermission === "granted" && "Browser alerts are enabled for new unread updates."}
+                    {browserNotificationPermission === "denied" && "Browser alerts are blocked. Enable notifications for this site in your browser settings."}
+                    {browserNotificationPermission === "unsupported" && "Browser alerts are unavailable here. In-app notifications remain available."}
+                  </div>
 
                   <div className="max-h-80 overflow-y-auto divide-y divide-white/5">
                     {userNotifications.length === 0 ? (
