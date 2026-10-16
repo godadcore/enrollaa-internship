@@ -14,7 +14,7 @@ function alreadyRegistered(error: { message?: string; code?: string } | null): b
   return error?.code === "email_exists" || /already been registered|already exists/i.test(message);
 }
 
-async function resolveAuthUserId(email: string, password: string): Promise<string> {
+async function createAuthUser(email: string, password: string): Promise<string> {
   const admin = privilegedDatabase();
   const created = await admin.auth.admin.createUser({
     email,
@@ -27,17 +27,10 @@ async function resolveAuthUserId(email: string, password: string): Promise<strin
   if (!alreadyRegistered(created.error)) {
     throw new InvitationError("Unable to activate this invitation.", 500);
   }
-
-  const { data: existingId, error: lookupError } = await admin.rpc("lookup_auth_user_id", { p_email: email });
-  if (lookupError || typeof existingId !== "string" || !existingId) {
-    throw new InvitationError("Unable to activate this invitation.", 500);
-  }
-
-  const updated = await admin.auth.admin.updateUserById(existingId, { password });
-  if (updated.error || !updated.data.user?.id) {
-    throw new InvitationError("Unable to activate this invitation.", 500);
-  }
-  return updated.data.user.id;
+  throw new InvitationError(
+    "An account already exists for this email. Sign in with your existing password or use the password-recovery flow, then contact an administrator to complete the invitation.",
+    409,
+  );
 }
 
 function throwActivationError(error: unknown): never {
@@ -59,9 +52,9 @@ function throwActivationError(error: unknown): never {
 }
 
 /**
- * Creates or reuses the Auth user for a valid invitation, then provisions the
- * profile from invitation rows. Client role/department fields are ignored.
- * Retry-safe if Auth user creation succeeded but profile linking failed.
+ * Creates a new Auth user for a valid invitation, then provisions the profile
+ * from invitation rows. Existing Auth passwords are never changed here.
+ * Client role/department fields are ignored.
  */
 export async function activateInvitationAccount(input: {
   token: unknown;
@@ -85,7 +78,7 @@ export async function activateInvitationAccount(input: {
     throw new InvitationError("Use the email address from your invitation.", 400);
   }
 
-  const authUserId = await resolveAuthUserId(invitation.email, input.password as string);
+  const authUserId = await createAuthUser(invitation.email, input.password as string);
   const { data, error } = await privilegedDatabase().rpc("activate_staff_invitation", {
     p_token_hash: hashInvitationToken(token),
     p_auth_user_id: authUserId,

@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const profile = await getRequestTrustedProfile();
     const payload = await listGiveaways(profile);
-    const standing = profile.role === "intern" ? await internStanding(profile) : null;
+    const standing = profile.role === "intern" || profile.role === "lead" ? await internStanding(profile) : null;
     return NextResponse.json({ success: true, ...payload, standing });
   } catch (error) {
     return jsonErrorResponse(error);

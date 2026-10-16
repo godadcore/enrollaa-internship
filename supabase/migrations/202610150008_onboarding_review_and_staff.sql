@@ -124,7 +124,7 @@ Version: v1.0-2026 | Effective: October 19, 2026
 3. Portfolio & Professional Profiles: Interns may showcase approved projects and their genuine verified contributions in personal portfolios, resumes, and LinkedIn profiles, subject to confidentiality rules and prior authorization.
 4. Non-Disclosure & Confidentiality: Internal platform logic, unreleased admission data signals, database configurations, business metrics, and personal user data must never be shared, copied, or published outside the platform.
 5. Code of Conduct & Policies: Interns agree to maintain professional standards, punctuality, and respect across all operational workflows.$agreement$,
-  encode(digest($agreement$ENROLLAA INTERNSHIP TERMS, CONFIDENTIALITY & INTELLECTUAL PROPERTY AGREEMENT
+  encode(extensions.digest($agreement$ENROLLAA INTERNSHIP TERMS, CONFIDENTIALITY & INTELLECTUAL PROPERTY AGREEMENT
 Version: v1.0-2026 | Effective: October 19, 2026
 
 1. Project Ownership: All deliverables, source code, designs, documentation, and product inventions created in connection with the Enrollaa Internship Program are governed by Enrollaa's written agreement and remain the proprietary assets of Enrollaa.

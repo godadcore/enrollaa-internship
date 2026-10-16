@@ -3,8 +3,10 @@ import "server-only";
 import { AuthorizationError, type TrustedProfile } from "./authorization";
 import { DataAccessError, describeDataAccessError } from "@/lib/data/errors";
 import { readJsonBody as readRequestJson, requireApiAdmin } from "@/lib/data/request";
+import { assertSameOrigin } from "@/lib/auth/csrf";
 
-export async function getAdminApiProfile(): Promise<TrustedProfile> {
+export async function getAdminApiProfile(request?: Request): Promise<TrustedProfile> {
+  if (request) assertSameOrigin(request);
   return requireApiAdmin();
 }
 

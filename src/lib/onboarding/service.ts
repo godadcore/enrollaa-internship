@@ -53,7 +53,7 @@ export async function getInternOnboarding(profile: TrustedProfile) {
     ? (
         await db
           .from("onboarding_documents")
-          .select("kind, original_filename, byte_size")
+        .select("kind, original_filename, byte_size, malware_scan_status, available_at")
           .eq("onboarding_submission_id", submission.id)
           .is("deleted_at", null)
       ).data ?? []
@@ -136,15 +136,14 @@ export async function submitInternOnboarding(profile: TrustedProfile, body: Reco
   const encrypted = encryptAccountNumber(accountNumber);
   const db = privilegedDatabase();
 
-  await db.from("onboarding_bank_details").delete().eq("onboarding_submission_id", current.submission.id);
-  const { error: bankError } = await db.from("onboarding_bank_details").insert({
+  const { error: bankError } = await db.from("onboarding_bank_details").upsert({
     onboarding_submission_id: current.submission.id,
     ciphertext: encrypted.ciphertext,
     nonce: encrypted.nonce,
     authentication_tag: encrypted.authenticationTag,
     encryption_key_version: encrypted.keyVersion,
     account_number_last4: encrypted.last4,
-  });
+  }, { onConflict: "onboarding_submission_id" });
   if (bankError) throw new DataAccessError("Payout details could not be stored.", 500);
 
   const { error: submitError, data } = await db.rpc("submit_onboarding", {
@@ -162,7 +161,7 @@ export async function uploadInternDocument(profile: TrustedProfile, kind: Docume
     throw new DataAccessError("This onboarding record cannot be changed.", 409);
   }
   const submissionId = current.submission?.id ?? (await saveInternDraft(profile, {})).submissionId;
-  await storeOnboardingDocument({ actor: profile, submissionId, kind, filename, buffer });
+  return storeOnboardingDocument({ actor: profile, submissionId, kind, filename, buffer });
 }
 
 export async function listReviewSubmissions(profile: TrustedProfile) {
@@ -172,7 +171,7 @@ export async function listReviewSubmissions(profile: TrustedProfile) {
   const db = privilegedDatabase();
   let query = db
     .from("onboarding_submissions")
-    .select("id, first_name, surname, email, role_title, status, created_at, updated_at, review_note, department_id, departments(name)")
+    .select("id, first_name, surname, email, role_title, status, created_at, updated_at, review_note, department_id, agreement_version_id, agreement_content_sha256, agreement_accepted_at, departments(name)")
     .neq("status", "draft")
     .order("created_at", { ascending: false });
   if (!isProgrammeWideRole(profile.role)) {
@@ -190,6 +189,10 @@ export async function listReviewSubmissions(profile: TrustedProfile) {
     submittedAt: row.created_at,
     updatedAt: row.updated_at,
     reviewNote: row.review_note,
+    agreementStatus:
+      row.agreement_version_id && row.agreement_accepted_at && typeof row.agreement_content_sha256 === "string" && /^[a-f0-9]{64}$/i.test(row.agreement_content_sha256)
+        ? "completed"
+        : "pending",
     department:
       (Array.isArray(row.departments) ? row.departments[0]?.name : (row.departments as { name?: string } | null)?.name) ??
       "Unavailable",
@@ -203,7 +206,7 @@ export async function getReviewSubmission(profile: TrustedProfile, submissionId:
   const db = privilegedDatabase();
   const { data: documents } = await db
     .from("onboarding_documents")
-    .select("id, kind, original_filename, byte_size, storage_path")
+    .select("id, kind, original_filename, byte_size, storage_path, malware_scan_status, available_at")
     .eq("onboarding_submission_id", submissionId)
     .is("deleted_at", null);
   const { data: bank } = await db
@@ -220,6 +223,7 @@ export async function getReviewSubmission(profile: TrustedProfile, submissionId:
       filename: doc.original_filename,
       byteSize: doc.byte_size,
     })),
+    agreementStatus: summary.agreementStatus,
   };
 }
 
@@ -238,22 +242,30 @@ export async function internDocumentAccess(profile: TrustedProfile, kind: Docume
   if (!current.submission?.id) throw new DataAccessError("The document is unavailable.", 404);
   const { data } = await privilegedDatabase()
     .from("onboarding_documents")
-    .select("storage_path")
+    .select("id")
     .eq("onboarding_submission_id", current.submission.id)
     .eq("kind", kind)
     .is("deleted_at", null)
+    .eq("malware_scan_status", "clean")
+    .not("available_at", "is", null)
     .maybeSingle();
-  if (!data?.storage_path) throw new DataAccessError("The document is unavailable.", 404);
-  return signedDocumentUrl(data.storage_path);
+  if (!data?.id) throw new DataAccessError("The document is unavailable.", 404);
+  return signedDocumentUrl(data.id, current.submission.id);
 }
 
 export async function reviewerDocumentAccess(profile: TrustedProfile, documentId: string) {
   const { data, error } = await privilegedDatabase()
     .from("onboarding_documents")
-    .select("id, storage_path, onboarding_submission_id, deleted_at")
+    .select("id, storage_path, onboarding_submission_id, deleted_at, malware_scan_status, available_at")
     .eq("id", documentId)
     .maybeSingle();
-  if (error || !data || data.deleted_at) throw new DataAccessError("The document is unavailable.", 404);
+  if (
+    error ||
+    !data ||
+    data.deleted_at ||
+    data.malware_scan_status !== "clean" ||
+    !data.available_at
+  ) throw new DataAccessError("The document is unavailable.", 404);
   await getReviewSubmission(profile, data.onboarding_submission_id);
-  return signedDocumentUrl(data.storage_path);
+  return signedDocumentUrl(data.id, data.onboarding_submission_id);
 }

@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: enrollaa-clamav-scanner
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /readyz
+    envVars:
+      - key: SCANNER_TOKEN
+        generateValue: true
+      - key: CLAMD_TIMEOUT_MS
+        value: "15000"

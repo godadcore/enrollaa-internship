@@ -76,6 +76,15 @@ export async function updateStaff(profile: TrustedProfile, staffId: string, body
   if (isProgrammeWideRole(profile.role)) {
     if (typeof body.role === "string") {
       if (!ROLES.includes(body.role as EnrollaaRole)) throw new DataAccessError("The selected account role is invalid.", 400);
+      if (target.role === "intern" && body.role === "lead") {
+        if (!target.is_active) throw new DataAccessError("Only an active intern can be promoted.", 409);
+        if (typeof body.departmentId !== "string" || !body.departmentId) {
+          throw new DataAccessError("A department is required before promoting an intern.", 400);
+        }
+        if (body.assignLead !== true) {
+          throw new DataAccessError("Department-lead assignment is required for promotion.", 400);
+        }
+      }
       if (
         (target.role === "admin" || target.role === "super_admin") &&
         body.role !== "admin" &&
@@ -129,11 +138,15 @@ export async function updateStaff(profile: TrustedProfile, staffId: string, body
         await db.from("department_leads").delete().eq("department_id", nextDepartmentId).eq("profile_id", target.id);
       }
     }
+    if (target.role === "lead" && patch.role !== "lead" && patch.role !== undefined) {
+      await db.from("department_leads").delete().eq("profile_id", target.id);
+    }
   }
   await recordSensitiveAudit({
     actor: profile,
-    action: "staff_updated",
+    action: target.role === "intern" && patch.role === "lead" ? "staff_promoted_to_lead" : "staff_updated",
     targetType: "profile",
     targetId: staffId,
+    metadata: target.role === "intern" && patch.role === "lead" ? { previousRole: "intern", nextRole: "lead" } : undefined,
   });
 }

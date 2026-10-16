@@ -13,6 +13,7 @@ const nextConfig = {
   // Prevent parallel build workers from racing on generated app manifests on Windows.
   experimental: {
     cpus: 1,
+    webpackBuildWorker: false,
   },
   poweredByHeader: false,
   images: {

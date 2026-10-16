@@ -14,8 +14,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const profile = await getAdminApiProfile();
-    const parsed = validateInvitationInput(await readJsonBody(request));
+    const profile = await getAdminApiProfile(request);
+    const parsed = validateInvitationInput(await readJsonBody(request), profile.role);
     if (!parsed.value) return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
     const result = await createStaffInvitation(parsed.value, profile);
     return NextResponse.json(

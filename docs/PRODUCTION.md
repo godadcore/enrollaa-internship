@@ -53,7 +53,24 @@ Must remain **unset** in production: `SKIP_EMAIL_DISPATCH`.
 - Database: restore from backup; never reset or replay stale `schema.sql`.
 - Pause invitations by stopping new sends in the admin UI and, if needed, rotating `RESEND_API_KEY`.
 
-## 6. Blocked until approved
+## 6. Malware scanning (required before document access)
+
+- The application requires a private, authenticated scanner configured with `MALWARE_SCANNER_URL`, `MALWARE_SCANNER_TOKEN`, and optionally `MALWARE_SCANNER_TIMEOUT_MS`.
+- The URL must be HTTPS in production. The service receives a POST of the file bytes with a Bearer token and must return JSON exactly containing `{"verdict":"clean"}` or `{"verdict":"infected"}`.
+- Missing configuration, timeout, outage, non-JSON, unauthenticated, or ambiguous responses mark the document `failed` and leave it unavailable. Only an explicit `clean` verdict sets `available_at`.
+- A local Docker service is now prepared under `scanner-service/`; it runs ClamAV with `freshclam` definitions and exposes the adapter-compatible contract. Netlify cannot provide a persistent ClamAV daemon, so deploy this service separately behind private networking and HTTPS before enabling production uploads.
+- Set the scanner service's server-only `SCANNER_TOKEN`; set the same secret only in the application's server environment as `MALWARE_SCANNER_TOKEN`. Never expose either value to the browser or commit it.
+- Verify safely with synthetic files (including the EICAR test signature in an isolated scanner environment), never real onboarding documents or a public upload service. No client-supplied verdict is trusted.
+
+## 7. Invitation and document-link preparation
+
+- Invitation creation and resend use the server-only Resend integration. Database RPCs enforce administrator authorization, active/expired/revoked status, duplicate-email protection, and resend restrictions. Delivery is recorded only after Resend returns HTTP success with a non-empty provider message ID.
+- `RESEND_API_KEY` and `EMAIL_FROM` must be configured in the application host, with the sender domain verified by Resend. No real delivery has been tested from this local environment.
+- The generic `/api/send-email` route remains disabled because it has no safe authorization or recipient contract.
+- `202610150011_document_links_preparation.sql` is a local, unapplied preparation migration. It supports HTTPS links from the explicit provider categories `google_drive`, `dropbox`, and `onedrive`, and stores them as `unscanned`. The application must never fetch these URLs server-side or expose them as clean scanned documents.
+- Do not apply this migration until the matching route/UI, host allow-list, reviewer authorization, and hosted schema plan have been reviewed.
+
+## 8. Blocked until approved
 
 - Connecting to hosted Supabase
 - Applying production migrations

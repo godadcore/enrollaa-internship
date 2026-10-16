@@ -109,24 +109,28 @@ export function InternOnboardingPanel() {
     const form = new FormData();
     form.set("kind", kind);
     form.set("file", file);
-    const response = await fetch("/api/onboarding/documents", { method: "POST", body: form });
-    const payload = await response.json();
-    if (!response.ok || !payload.success) {
-      setError(payload.error || "The document could not be uploaded.");
-      return;
+    try {
+      const response = await fetch("/api/onboarding/documents", { method: "POST", body: form });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        setError(payload.error || "The document could not be uploaded.");
+        return;
+      }
+      setSuccess(kind === "photo" ? "Photograph uploaded and cleared by security scanning." : "CV uploaded and cleared by security scanning.");
+      await load();
+      setPhone(draftValues.phone);
+      setSex(draftValues.sex);
+      setLocationState(draftValues.locationState);
+      setLocationCity(draftValues.locationCity);
+      setInstitution(draftValues.institution);
+      setBankName(draftValues.bankName);
+      setAccountName(draftValues.accountName);
+      setAccountNumber(draftValues.accountNumber);
+      setSignature(draftValues.signature);
+      setAccepted(draftValues.accepted);
+    } catch {
+      setError("The upload could not reach the server. No document was made available.");
     }
-    setSuccess(kind === "photo" ? "Photograph uploaded." : "CV uploaded.");
-    await load();
-    setPhone(draftValues.phone);
-    setSex(draftValues.sex);
-    setLocationState(draftValues.locationState);
-    setLocationCity(draftValues.locationCity);
-    setInstitution(draftValues.institution);
-    setBankName(draftValues.bankName);
-    setAccountName(draftValues.accountName);
-    setAccountNumber(draftValues.accountNumber);
-    setSignature(draftValues.signature);
-    setAccepted(draftValues.accepted);
   }
 
   async function submit() {
@@ -218,13 +222,15 @@ export function InternOnboardingPanel() {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <label className="glass-card p-4 space-y-2 min-w-0">
           <span className="label-text">Photograph</span>
+          <p className="text-xs text-enrollaa-muted-light break-words">JPEG, PNG, or WebP · 1 byte to 5 MB. Security scanning is required before availability.</p>
           <p className="text-xs text-enrollaa-muted-light break-words">{photo ? photo.original_filename : "No photograph uploaded"}</p>
           <input disabled={locked} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void upload("photo", event.target.files?.[0])} />
         </label>
         <label className="glass-card p-4 space-y-2 min-w-0">
           <span className="label-text">CV</span>
+          <p className="text-xs text-enrollaa-muted-light break-words">PDF or DOCX only · 1 byte to 10 MB. Legacy .doc files are not accepted without reliable signature validation.</p>
           <p className="text-xs text-enrollaa-muted-light break-words">{cv ? cv.original_filename : "No CV uploaded"}</p>
-          <input disabled={locked} type="file" accept=".pdf,.doc,.docx,application/pdf" onChange={(event) => void upload("cv", event.target.files?.[0])} />
+          <input disabled={locked} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => void upload("cv", event.target.files?.[0])} />
         </label>
       </div>
 

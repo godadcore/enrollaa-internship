@@ -149,16 +149,20 @@ export function DashboardShell({
 
   useEffect(() => {
     let active = true;
-    fetch("/api/notifications", { cache: "no-store" })
-      .then(async (response) => {
+    const loadNotifications = async () => {
+      try {
+        const response = await fetch("/api/notifications", { cache: "no-store" });
         const data = await response.json();
         if (active && response.ok && data.success) setLiveNotifications(data.notifications);
-      })
-      .catch(() => {
-        if (active) setLiveNotifications([]);
-      });
+      } catch {
+        // Keep the last confirmed notification state during transient outages.
+      }
+    };
+    void loadNotifications();
+    const timer = window.setInterval(() => void loadNotifications(), 30_000);
     return () => {
       active = false;
+      window.clearInterval(timer);
     };
   }, []);
 

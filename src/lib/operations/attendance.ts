@@ -12,9 +12,11 @@ function attendanceDate(value: unknown): string {
   return getDateStringWAT(value instanceof Date ? value : new Date(String(value ?? "")));
 }
 
-function requireIntern(profile: TrustedProfile) {
-  if (profile.role !== "intern") throw new AuthorizationError("Intern authorization is required.", 403);
-  if (!profile.department_id) throw new DataAccessError("This intern is not assigned to a department.", 400);
+function requireAttendanceParticipant(profile: TrustedProfile) {
+  if (profile.role !== "intern" && profile.role !== "lead") {
+    throw new AuthorizationError("Intern or department-lead attendance is required.", 403);
+  }
+  if (!profile.department_id) throw new DataAccessError("This account is not assigned to a department.", 400);
 }
 
 export async function listAttendance(profile: TrustedProfile) {
@@ -53,7 +55,7 @@ function mapAttendance(row: Record<string, unknown>) {
 }
 
 export async function checkIn(profile: TrustedProfile) {
-  requireIntern(profile);
+  requireAttendanceParticipant(profile);
   const now = new Date();
   const date = getDateStringWAT(now);
   const evaluation = evaluatePunctuality(now);
@@ -102,7 +104,7 @@ export async function checkIn(profile: TrustedProfile) {
 }
 
 export async function checkOut(profile: TrustedProfile) {
-  requireIntern(profile);
+  requireAttendanceParticipant(profile);
   const date = getDateStringWAT(new Date());
   const db = privilegedDatabase();
   const { data: existing } = await db
@@ -127,7 +129,7 @@ export async function checkOut(profile: TrustedProfile) {
 }
 
 export async function correctAttendance(profile: TrustedProfile, body: Record<string, unknown>) {
-  if (!["admin", "super_admin", "lead", "manager"].includes(profile.role)) {
+  if (profile.role !== "admin" && profile.role !== "super_admin") {
     throw new AuthorizationError("You do not have access to this resource.", 403);
   }
   const id = typeof body.id === "string" ? body.id : "";

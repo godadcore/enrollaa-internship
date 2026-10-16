@@ -10,6 +10,10 @@ import { notifyUnique } from "@/lib/operations/notify";
 const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 const STAFF_ROLES = ["admin", "super_admin", "lead", "manager"] as const;
 
+function missingReplyColumn(error: { message?: string; code?: string } | null) {
+  return error?.code === "42703" && /parent_comment_id/i.test(error?.message ?? "");
+}
+
 function canManageTasks(profile: TrustedProfile) {
   return STAFF_ROLES.includes(profile.role as (typeof STAFF_ROLES)[number]);
 }
@@ -46,9 +50,16 @@ export async function listTasks(profile: TrustedProfile) {
   const { data: submissions } = ids.length
     ? await db.from("task_submissions").select("id, task_id, intern_profile_id, deliverable_url, notes, submitted_at, review_status, review_feedback, reviewed_at, profiles!task_submissions_intern_profile_id_fkey(first_name, surname)").in("task_id", ids)
     : { data: [] };
-  const { data: comments } = ids.length
-    ? await db.from("task_comments").select("id, task_id, author_profile_id, message, created_at, profiles!task_comments_author_profile_id_fkey(first_name, surname, role)").in("task_id", ids).order("created_at")
-    : { data: [] };
+  let comments: Record<string, unknown>[] = [];
+  if (ids.length) {
+    const withReplies = await db.from("task_comments").select("id, task_id, author_profile_id, parent_comment_id, message, created_at, profiles!task_comments_author_profile_id_fkey(first_name, surname, role)").in("task_id", ids).order("created_at");
+    if (!withReplies.error) comments = withReplies.data ?? [];
+    else if (missingReplyColumn(withReplies.error)) {
+      const legacy = await db.from("task_comments").select("id, task_id, author_profile_id, message, created_at, profiles!task_comments_author_profile_id_fkey(first_name, surname, role)").in("task_id", ids).order("created_at");
+      if (legacy.error) throw new DataAccessError("Unable to load task comments.", 500);
+      comments = legacy.data ?? [];
+    } else throw new DataAccessError("Unable to load task comments.", 500);
+  }
   return rows.map((row) => mapTask(row, submissions ?? [], comments ?? [], profile));
 }
 
@@ -111,6 +122,7 @@ function mapTask(
         return {
           id: item.id,
           authorProfileId: item.author_profile_id,
+          parentCommentId: item.parent_comment_id,
           authorName: nameOf(item.profiles),
           authorRole: (author as { role?: string } | null)?.role ?? "",
           message: item.message,
@@ -334,6 +346,7 @@ export async function reviewTask(profile: TrustedProfile, body: Record<string, u
 export async function addTaskComment(profile: TrustedProfile, body: Record<string, unknown>) {
   const taskId = typeof body.taskId === "string" ? body.taskId : "";
   const message = typeof body.message === "string" ? body.message.trim().slice(0, 2000) : "";
+  const parentCommentId = typeof body.parentCommentId === "string" ? body.parentCommentId : null;
   if (!taskId || !message) throw new DataAccessError("A comment is required.", 400);
   const db = privilegedDatabase();
   const { data: task } = await db.from("tasks").select("id, department_id, assigned_to_profile_id, created_by_profile_id, title").eq("id", taskId).maybeSingle();
@@ -342,13 +355,30 @@ export async function addTaskComment(profile: TrustedProfile, body: Record<strin
     (profile.role === "intern" && internCanSee(profile, task.department_id, task.assigned_to_profile_id)) ||
     (canManageTasks(profile) && (isProgrammeWideRole(profile.role) || task.department_id === profile.department_id));
   if (!allowed) throw new AuthorizationError("You do not have access to this resource.", 403);
+  let parentAuthorId: string | null = null;
+  if (parentCommentId) {
+    const { data: parent } = await db
+      .from("task_comments")
+      .select("id, task_id, author_profile_id")
+      .eq("id", parentCommentId)
+      .maybeSingle();
+    if (!parent || parent.task_id !== taskId) throw new DataAccessError("The reply target is invalid.", 400);
+    parentAuthorId = parent.author_profile_id;
+  }
+  const insertPayload: Record<string, unknown> = { task_id: taskId, author_profile_id: profile.id, message };
+  if (parentCommentId) insertPayload.parent_comment_id = parentCommentId;
   const { data: comment, error } = await db
     .from("task_comments")
-    .insert({ task_id: taskId, author_profile_id: profile.id, message })
+    .insert(insertPayload)
     .select("id")
     .single();
-  if (error || !comment) throw new DataAccessError("Unable to add the comment.", 500);
-  const recipient = profile.id === task.created_by_profile_id ? task.assigned_to_profile_id : task.created_by_profile_id;
+  if (error || !comment) {
+    if (parentCommentId && missingReplyColumn(error)) throw new DataAccessError("Replies are unavailable until the approved reply migration is applied.", 503);
+    throw new DataAccessError("Unable to add the comment.", 500);
+  }
+  const recipient = parentAuthorId && parentAuthorId !== profile.id
+    ? parentAuthorId
+    : profile.id === task.created_by_profile_id ? task.assigned_to_profile_id : task.created_by_profile_id;
   if (recipient) {
     await notifyUnique({
       recipientProfileId: recipient,
@@ -359,4 +389,11 @@ export async function addTaskComment(profile: TrustedProfile, body: Record<strin
       sourceId: comment.id,
     });
   }
+  return {
+    id: comment.id,
+    parentCommentId,
+    authorName: `${profile.first_name} ${profile.surname}`.trim(),
+    message,
+    createdAt: new Date().toISOString(),
+  };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Modal, StatusBadge } from "@/components/ui";
 
 export type OperationalTask = {
@@ -15,7 +15,7 @@ export type OperationalTask = {
   status: string;
   dueAt: string;
   submissions: { id: string; internProfileId: string; internName: string; deliverableUrl: string; notes: string | null; reviewStatus: string; reviewFeedback: string | null }[];
-  comments: { id: string; authorName: string; message: string; createdAt: string }[];
+  comments: { id: string; parentCommentId?: string | null; authorName: string; message: string; createdAt: string }[];
 };
 
 export function OperationalTaskModal({
@@ -32,19 +32,32 @@ export function OperationalTaskModal({
   const [url, setUrl] = useState("");
   const [notes, setNotes] = useState("");
   const [comment, setComment] = useState("");
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [comments, setComments] = useState(task?.comments ?? []);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setComments(task?.comments ?? []);
+  }, [task]);
   if (!task) return null;
   const submission = task.submissions[0];
 
   async function post(path: string, body: Record<string, unknown>) {
     setBusy(true);
     setError("");
+    setSuccess("");
     try {
       const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Unable to save.");
+      if (path === "/api/tasks/comments" && data.comment) {
+        setComments((current) => [...current, data.comment]);
+        setComment("");
+        setReplyTo(null);
+      }
+      if (path === "/api/tasks/review") setSuccess(body.decision === "approved" ? "Project approved successfully." : "Revision request saved.");
       onUpdated();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save.");
@@ -80,14 +93,18 @@ export function OperationalTaskModal({
           </>
         ) : null}
         <div className="space-y-2">
-          {task.comments.map((item) => (
-            <p key={item.id} className="text-xs text-enrollaa-muted-light break-words"><span className="text-white">{item.authorName}:</span> {item.message}</p>
+          {comments.map((item) => (
+            <div key={item.id} className={`text-xs text-enrollaa-muted-light break-words ${item.parentCommentId ? "ml-4 border-l border-white/10 pl-2" : ""}`}>
+              <p><span className="text-white">{item.authorName}:</span> {item.message}</p>
+              <button type="button" className="text-enrollaa-green text-[11px]" onClick={() => setReplyTo(item.id)}>Reply</button>
+            </div>
           ))}
           <div className="flex flex-col sm:flex-row gap-2">
-            <input value={comment} onChange={(event) => setComment(event.target.value)} className="flex-1 min-w-0 bg-[#090C15] border border-white/15 text-white text-sm rounded-sm px-3 py-2.5" />
-            <button type="button" disabled={busy} className="btn-ghost" onClick={() => void post("/api/tasks/comments", { taskId: task.id, message: comment })}>Comment</button>
+            <input value={comment} onChange={(event) => setComment(event.target.value)} placeholder={replyTo ? "Write a reply" : "Write a comment"} className="flex-1 min-w-0 bg-[#090C15] border border-white/15 text-white text-sm rounded-sm px-3 py-2.5" />
+            <button type="button" disabled={busy} className="btn-ghost" onClick={() => void post("/api/tasks/comments", { taskId: task.id, message: comment, parentCommentId: replyTo })}>{replyTo ? "Reply" : "Comment"}</button>
           </div>
         </div>
+        {success ? <p className="text-xs text-enrollaa-green break-words">{success}</p> : null}
         {error ? <p className="text-xs text-enrollaa-red break-words">{error}</p> : null}
       </div>
     </Modal>

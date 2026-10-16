@@ -90,7 +90,7 @@ function displayedStatus(status: string, expiresAt: string | null): string {
   return status;
 }
 
-export function validateInvitationInput(input: unknown): { value?: InvitationInput; error?: string } {
+export function validateInvitationInput(input: unknown, actorRole: string): { value?: InvitationInput; error?: string } {
   if (!input || typeof input !== "object") return { error: "Invitation details are required." };
   const record = input as Record<string, unknown>;
   const firstName = cleanText(record.firstName, 100);
@@ -106,6 +106,9 @@ export function validateInvitationInput(input: unknown): { value?: InvitationInp
     return { error: "First name, surname, email, department, and role title are required." };
   }
   if (!validRoles.has(assignedRole)) return { error: "The selected account role is invalid." };
+  if (assignedRole === "super_admin" && actorRole !== "super_admin") {
+    return { error: "Only a super-admin can invite another super-admin." };
+  }
   if (assignedRole === "intern" && !isOfficialInternshipRole(roleTitle)) {
     return { error: "Intern invitations must use one of the six official internship roles." };
   }

@@ -4,7 +4,7 @@ import { InvitationError, resendStaffInvitation } from "@/lib/invitations";
 
 export async function POST(request: Request) {
   try {
-    const profile = await getAdminApiProfile();
+    const profile = await getAdminApiProfile(request);
     const body = await readJsonBody(request);
     if (!body || typeof body !== "object") throw new InvitationError("Invitation not found.", 404);
     const invitationId = (body as Record<string, unknown>).invitationId;

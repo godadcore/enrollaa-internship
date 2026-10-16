@@ -66,10 +66,13 @@ async function dispatchEmail(to: string, subject: string, html: string, text: st
         };
       }
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
+      if (!data || typeof data.id !== "string" || !data.id.trim()) {
+        return { success: false, isSimulated: false, error: "The email provider returned an invalid acceptance response." };
+      }
       return {
         success: true,
-        messageId: data.id,
+        messageId: data.id.trim(),
         isSimulated: false,
       };
     } catch {

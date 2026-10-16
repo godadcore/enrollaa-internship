@@ -7,8 +7,8 @@ export async function POST(request: Request) {
   try {
     const profile = await getRequestTrustedProfile();
     const body = (await readJsonBody(request)) as Record<string, unknown>;
-    await addTaskComment(profile, body);
-    return NextResponse.json({ success: true });
+    const comment = await addTaskComment(profile, body);
+    return NextResponse.json({ success: true, comment });
   } catch (error) {
     return jsonErrorResponse(error);
   }

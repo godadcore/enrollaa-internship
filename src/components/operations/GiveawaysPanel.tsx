@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { IconAlertCircle, IconPlus, IconTrophy } from "@/components/icons";
 import { EmptyState, Modal, StatusBadge, Toast } from "@/components/ui";
+import { CustomDatePicker } from "@/components/CustomDatePicker";
 import { formatInWAT } from "@/lib/date-utils";
 import { asList, useLoadTicket } from "@/lib/use-load-ticket";
 
@@ -63,7 +64,7 @@ export function GiveawaysPanel({ mode }: { mode: "intern" | "staff" }) {
       </div>
       {standing ? (
         <div className="glass-card p-4 space-y-2">
-          <p className={`text-xs font-heading font-bold ${standing.eligible ? "text-enrollaa-green" : "text-enrollaa-red"}`}>{standing.eligible ? "Eligible (80%+ composite)" : "Below 80% eligibility"}</p>
+          <p className={`text-xs font-heading font-bold ${standing.eligible ? "text-enrollaa-green" : "text-enrollaa-red"}`}>{standing.eligible ? "Eligible participant" : "Below eligibility threshold"}</p>
           <p className="text-xs text-enrollaa-muted-light">Attendance {standing.attendanceScore}% · Tasks {standing.taskScore}% · Composite {standing.composite}%</p>
         </div>
       ) : null}
@@ -107,15 +108,9 @@ export function GiveawaysPanel({ mode }: { mode: "intern" | "staff" }) {
         <div className="space-y-3 min-w-0">
           <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Title" className="w-full min-w-0 bg-[#090C15] border border-white/15 text-white text-sm rounded-sm px-3 py-2.5" />
           <textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Description" className="w-full min-w-0 bg-[#090C15] border border-white/15 text-white text-sm rounded-sm px-3 py-2.5" />
-          <label className="text-xs text-enrollaa-muted-light">Scheduled
-            <input type="datetime-local" value={form.scheduledAt} onChange={(event) => setForm({ ...form, scheduledAt: event.target.value })} className="mt-1 w-full min-w-0 bg-[#090C15] border border-white/15 text-white text-sm rounded-sm px-3 py-2.5" />
-          </label>
-          <label className="text-xs text-enrollaa-muted-light">Scoring start
-            <input type="datetime-local" value={form.scoringPeriodStart} onChange={(event) => setForm({ ...form, scoringPeriodStart: event.target.value })} className="mt-1 w-full min-w-0 bg-[#090C15] border border-white/15 text-white text-sm rounded-sm px-3 py-2.5" />
-          </label>
-          <label className="text-xs text-enrollaa-muted-light">Scoring end
-            <input type="datetime-local" value={form.scoringPeriodEnd} onChange={(event) => setForm({ ...form, scoringPeriodEnd: event.target.value })} className="mt-1 w-full min-w-0 bg-[#090C15] border border-white/15 text-white text-sm rounded-sm px-3 py-2.5" />
-          </label>
+          <CustomDatePicker label="Scheduled" value={form.scheduledAt} onChange={(value) => setForm({ ...form, scheduledAt: value })} includeTime required />
+          <CustomDatePicker label="Scoring start" value={form.scoringPeriodStart} onChange={(value) => setForm({ ...form, scoringPeriodStart: value })} includeTime />
+          <CustomDatePicker label="Scoring end" value={form.scoringPeriodEnd} onChange={(value) => setForm({ ...form, scoringPeriodEnd: value })} includeTime />
           <button type="button" className="btn-primary w-full" onClick={() => void post({ ...form, prize1st: Number(form.prize1st), prize2nd: Number(form.prize2nd), scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : "", scoringPeriodStart: form.scoringPeriodStart ? new Date(form.scoringPeriodStart).toISOString() : form.scheduledAt ? new Date(form.scheduledAt).toISOString() : "", scoringPeriodEnd: form.scoringPeriodEnd ? new Date(form.scoringPeriodEnd).toISOString() : form.scheduledAt ? new Date(form.scheduledAt).toISOString() : "" })}>Save</button>
         </div>
       </Modal>

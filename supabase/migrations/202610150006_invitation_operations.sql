@@ -50,6 +50,12 @@ begin
   ) then
     raise exception 'Administrator authorization is required';
   end if;
+  if p_assigned_role = 'super_admin' and not exists (
+    select 1 from public.profiles
+    where id = p_actor_profile_id and is_active and role = 'super_admin'
+  ) then
+    raise exception 'Only a super-admin can invite another super-admin';
+  end if;
 
   select * into v_department from public.departments
   where slug = btrim(p_department_slug) and is_active

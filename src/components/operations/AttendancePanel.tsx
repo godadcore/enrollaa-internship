@@ -5,6 +5,7 @@ import { IconAlertCircle, IconCalendar, IconCheckCircle, IconClock, IconTrending
 import { DataTable, EmptyState, Modal, StatCard, StatusBadge, Toast } from "@/components/ui";
 import { formatInWAT } from "@/lib/date-utils";
 import { asList, useLoadTicket } from "@/lib/use-load-ticket";
+import { useApp } from "@/lib/state";
 
 type RecordRow = {
   id: string;
@@ -19,6 +20,7 @@ type RecordRow = {
 };
 
 export function AttendancePanel({ mode }: { mode: "intern" | "staff" }) {
+  const { currentUser } = useApp();
   const [records, setRecords] = useState<RecordRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -53,6 +55,7 @@ export function AttendancePanel({ mode }: { mode: "intern" | "staff" }) {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
   const mineToday = records.find((row) => row.date === today);
   const onTime = records.filter((row) => row.status === "on_time").length;
+  const canSelfAttend = currentUser.role === "intern" || currentUser.role === "lead";
 
   async function action(kind: "checkin" | "checkout") {
     setBusy(true);
@@ -97,7 +100,7 @@ export function AttendancePanel({ mode }: { mode: "intern" | "staff" }) {
   return (
     <div className="space-y-4 animate-fade-in-up min-w-0">
       <Toast message={toast?.message || ""} type={toast?.type || "success"} visible={!!toast} />
-      {mode === "intern" ? (
+      {(mode === "intern" || canSelfAttend) ? (
         <div className="glass-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="font-heading text-xl font-bold text-white">Daily attendance</h2>

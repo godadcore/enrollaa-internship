@@ -6,6 +6,7 @@ import { privilegedDatabase } from "@/lib/data/database";
 import { isProgrammeWideRole } from "@/lib/data/scope";
 import { recordSensitiveAudit } from "@/lib/data/audit";
 import { notifyUnique } from "@/lib/operations/notify";
+import { getDateStringWAT } from "@/lib/date-utils";
 
 export async function listGiveaways(profile: TrustedProfile) {
   const db = privilegedDatabase();
@@ -54,22 +55,69 @@ export async function listGiveaways(profile: TrustedProfile) {
   };
 }
 
-export async function internStanding(profile: TrustedProfile) {
-  if (profile.role !== "intern") throw new AuthorizationError("Intern authorization is required.", 403);
-  const db = privilegedDatabase();
-  const { data: attendance } = await db.from("attendance_records").select("status").eq("intern_profile_id", profile.id);
-  const { data: tasks } = await db
+const PARTICIPANT_ROLES = ["intern", "lead"] as const;
+
+function requireEligibleParticipant(profile: TrustedProfile) {
+  if (!profile.is_active || !PARTICIPANT_ROLES.includes(profile.role as (typeof PARTICIPANT_ROLES)[number])) {
+    throw new AuthorizationError("Only active interns and department leads may participate.", 403);
+  }
+}
+
+async function calculateStanding(
+  db: ReturnType<typeof privilegedDatabase>,
+  profile: TrustedProfile,
+  options?: { start?: string; end?: string; punctualityWeight?: number; taskWeight?: number; minimumAttendanceRate?: number; minimumApprovedTasks?: number },
+) {
+  const attendanceQuery = db
+    .from("attendance_records")
+    .select("status, check_in_at, attendance_date")
+    .eq("intern_profile_id", profile.id);
+  const taskQuery = db
     .from("tasks")
-    .select("id, status, assigned_to_profile_id, department_id")
+    .select("id, assigned_to_profile_id, department_id, created_at")
     .or(`assigned_to_profile_id.eq.${profile.id},assigned_to_profile_id.is.null`);
-  const mine = (tasks ?? []).filter((task) => task.assigned_to_profile_id === profile.id || task.department_id === profile.department_id);
-  const { data: submissions } = await db.from("task_submissions").select("task_id, review_status").eq("intern_profile_id", profile.id);
-  const approved = (submissions ?? []).filter((row) => row.review_status === "approved").length;
-  const onTime = (attendance ?? []).filter((row) => row.status === "on_time").length;
-  const attendanceScore = attendance?.length ? Math.round((onTime / attendance.length) * 100) : 100;
-  const taskScore = mine.length ? Math.round((approved / mine.length) * 100) : 100;
-  const composite = Math.round(attendanceScore * 0.5 + taskScore * 0.5);
-  return { attendanceScore, taskScore, composite, eligible: composite >= 80 };
+  const submissionQuery = db
+    .from("task_submissions")
+    .select("task_id, review_status, submitted_at")
+    .eq("intern_profile_id", profile.id);
+  if (options?.start) {
+    attendanceQuery.gte("attendance_date", getDateStringWAT(options.start));
+    taskQuery.gte("created_at", options.start);
+    submissionQuery.gte("submitted_at", options.start);
+  }
+  if (options?.end) {
+    attendanceQuery.lte("attendance_date", getDateStringWAT(options.end));
+    taskQuery.lte("created_at", options.end);
+    submissionQuery.lte("submitted_at", options.end);
+  }
+  const [{ data: attendance, error: attendanceError }, { data: tasks, error: taskError }, { data: submissions, error: submissionError }] = await Promise.all([
+    attendanceQuery,
+    taskQuery,
+    submissionQuery,
+  ]);
+  if (attendanceError || taskError || submissionError) throw new DataAccessError("Unable to calculate giveaway scores.", 500);
+  const relevantTasks = (tasks ?? []).filter((task) => task.assigned_to_profile_id === profile.id || task.department_id === profile.department_id);
+  const approved = (submissions ?? []).filter((row) => row.review_status === "approved" && relevantTasks.some((task) => task.id === row.task_id)).length;
+  const attendanceScore = attendance?.length ? Math.round((attendance.filter((row) => row.status === "on_time").length / attendance.length) * 100) : 0;
+  const taskScore = relevantTasks.length ? Math.round((approved / relevantTasks.length) * 100) : 0;
+  const punctualityWeight = options?.punctualityWeight ?? 50;
+  const taskWeight = options?.taskWeight ?? 50;
+  const composite = Math.round(attendanceScore * (punctualityWeight / 100) + taskScore * (taskWeight / 100));
+  const minimumAttendanceRate = options?.minimumAttendanceRate ?? 0;
+  const minimumApprovedTasks = options?.minimumApprovedTasks ?? 0;
+  return {
+    attendanceScore,
+    taskScore,
+    composite,
+    eligible: composite >= 80 && attendanceScore >= minimumAttendanceRate && approved >= minimumApprovedTasks,
+    earliest: (attendance ?? []).map((row) => row.check_in_at).filter(Boolean).sort()[0] || "9999",
+  };
+}
+
+export async function internStanding(profile: TrustedProfile) {
+  requireEligibleParticipant(profile);
+  const db = privilegedDatabase();
+  return calculateStanding(db, profile);
 }
 
 export async function createGiveaway(profile: TrustedProfile, body: Record<string, unknown>) {
@@ -124,41 +172,63 @@ export async function executeGiveaway(profile: TrustedProfile, id: string) {
   const db = privilegedDatabase();
   const { data: event } = await db.from("giveaways").select("*").eq("id", id).maybeSingle();
   if (!event) throw new DataAccessError("Giveaway not found.", 404);
+  const { data: existingWinners, error: existingWinnerError } = await db
+    .from("giveaway_winners")
+    .select("id, giveaway_id, intern_profile_id, rank, prize_amount, final_score, payment_status")
+    .eq("giveaway_id", id)
+    .order("rank", { ascending: true });
+  if (existingWinnerError) throw new DataAccessError("Unable to verify existing giveaway winners.", 500);
+  if (existingWinners?.length) {
+    const participantIds = existingWinners.map((row) => row.intern_profile_id).filter((value): value is string => typeof value === "string");
+    const { data: existingParticipants, error: participantError } = participantIds.length
+      ? await db.from("profiles").select("id, role, is_active").in("id", participantIds)
+      : { data: [], error: null };
+    if (participantError) throw new DataAccessError("Unable to verify existing giveaway participants.", 500);
+    const participantById = new Map((existingParticipants ?? []).map((row) => [row.id, row]));
+    const validExisting = existingWinners.length >= 1 && existingWinners.length <= 2 && new Set(existingWinners.map((row) => row.rank)).size === existingWinners.length && existingWinners.every((row, index) => {
+      const participant = participantById.get(row.intern_profile_id);
+      const expectedPrize = row.rank === 1 ? event.prize_1st : row.rank === 2 ? event.prize_2nd : null;
+      const score = Number(row.final_score);
+      return row.giveaway_id === id && row.rank === index + 1 && participant?.is_active === true && PARTICIPANT_ROLES.includes(participant.role as (typeof PARTICIPANT_ROLES)[number]) && expectedPrize !== null && row.prize_amount === expectedPrize && Number.isFinite(score) && score >= 0 && score <= 100;
+    });
+    if (!validExisting) throw new DataAccessError("Existing giveaway winners are inconsistent and require review.", 409);
+    const wasCompleted = event.status === "completed";
+    const { error: recoveryError } = await db.from("giveaways").update({ status: "completed", executed_at: event.executed_at ?? new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id).in("status", ["scheduled", "running"]);
+    if (recoveryError) throw new DataAccessError("Unable to recover giveaway completion.", 500);
+    for (const row of existingWinners) {
+      await notifyUnique({ recipientProfileId: row.intern_profile_id, title: "Giveaway result", message: `You placed #${row.rank} in ${event.title}.`, type: "giveaway", sourceType: "giveaway_winner", sourceId: id });
+    }
+    await recordSensitiveAudit({ actor: profile, action: wasCompleted ? "giveaway_notifications_retried" : "giveaway_completed", targetType: "giveaway", targetId: id, metadata: { recovered: !wasCompleted } });
+    return { winnerCount: existingWinners.length, recovered: true };
+  }
   if (event.status !== "scheduled" && event.status !== "running") throw new DataAccessError("This giveaway cannot be completed.", 409);
-  const { data: interns } = await db.from("profiles").select("id, first_name, surname, department_id").eq("role", "intern").eq("is_active", true);
-  const internList = interns ?? [];
-  if (!internList.length) throw new DataAccessError("No active interns are eligible.", 409);
+  const { data: participants, error: participantError } = await db.from("profiles").select("id, first_name, surname, department_id, role, is_active").in("role", PARTICIPANT_ROLES).eq("is_active", true);
+  if (participantError) throw new DataAccessError("Unable to load giveaway participants.", 500);
+  const participantList = participants ?? [];
+  if (!participantList.length) throw new DataAccessError("No active eligible participants.", 409);
   const start = event.scoring_period_start;
   const end = event.scoring_period_end;
-  const { data: attendance } = await db
-    .from("attendance_records")
-    .select("intern_profile_id, status, check_in_at, attendance_date")
-    .gte("attendance_date", start.slice(0, 10))
-    .lte("attendance_date", end.slice(0, 10));
-  const { data: tasks } = await db.from("tasks").select("id, assigned_to_profile_id, department_id, created_at");
-  const { data: submissions } = await db.from("task_submissions").select("task_id, intern_profile_id, review_status, submitted_at");
-  const scores = internList.map((intern) => {
-    const records = (attendance ?? []).filter((row) => row.intern_profile_id === intern.id);
-    const onTime = records.filter((row) => row.status === "on_time").length;
-    const punctuality = records.length ? (onTime / records.length) * 100 : 0;
-    const internTasks = (tasks ?? []).filter(
-      (task) => task.assigned_to_profile_id === intern.id || (task.assigned_to_profile_id == null && task.department_id === intern.department_id),
-    );
-    const approved = (submissions ?? []).filter((row) => row.intern_profile_id === intern.id && row.review_status === "approved").length;
-    const taskScore = internTasks.length ? (approved / internTasks.length) * 100 : 0;
-    const finalScore = punctuality * (event.punctuality_weight / 100) + taskScore * (event.task_weight / 100);
-    const earliest = records.map((row) => row.check_in_at).filter(Boolean).sort()[0] || "9999";
-    return { intern, punctuality, taskScore, finalScore, earliest };
-  });
+  const scores = await Promise.all(participantList.map(async (participant) => {
+    const participantProfile = { ...profile, id: participant.id, role: participant.role, department_id: participant.department_id, is_active: participant.is_active } as TrustedProfile;
+    const standing = await calculateStanding(db, participantProfile, {
+      start,
+      end,
+      punctualityWeight: event.punctuality_weight,
+      taskWeight: event.task_weight,
+      minimumAttendanceRate: event.minimum_attendance_rate,
+      minimumApprovedTasks: event.minimum_approved_tasks,
+    });
+    return { participant, standing, finalScore: standing.composite, earliest: standing.earliest };
+  }));
   scores.sort((a, b) => b.finalScore - a.finalScore || a.earliest.localeCompare(b.earliest));
-  const winners = scores.slice(0, 2).filter((row, index, list) => list.findIndex((item) => item.intern.id === row.intern.id) === index);
+  const winners = scores.filter((row) => row.standing.eligible).slice(0, 2).filter((row, index, list) => list.findIndex((item) => item.participant.id === row.participant.id) === index);
   if (!winners.length) throw new DataAccessError("No eligible winners could be selected.", 409);
   const rows = winners.map((row, index) => ({
     giveaway_id: id,
-    intern_profile_id: row.intern.id,
+    intern_profile_id: row.participant.id,
     rank: index + 1,
     prize_amount: index === 0 ? event.prize_1st : event.prize_2nd,
-    final_score: Math.round(row.finalScore * 10) / 10,
+    final_score: row.finalScore,
     payment_status: "pending",
   }));
   const { error: winnerError } = await db.from("giveaway_winners").insert(rows);

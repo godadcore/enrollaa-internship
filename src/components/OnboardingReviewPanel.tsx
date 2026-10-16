@@ -16,11 +16,13 @@ type ReviewRow = {
   status: string;
   submittedAt: string;
   reviewNote?: string | null;
+  agreementStatus?: "completed" | "pending" | "unavailable";
 };
 
 type ReviewDetail = ReviewRow & {
   accountLast4?: string | null;
   documents?: { id: string; kind: string; filename: string }[];
+  agreementStatus?: "completed" | "pending" | "unavailable";
 };
 
 export function OnboardingReviewPanel() {
@@ -158,6 +160,7 @@ export function OnboardingReviewPanel() {
             <p className="text-xs text-enrollaa-muted-light break-all">{detail.email}</p>
             <p className="text-xs text-enrollaa-muted-light break-words">{detail.department} · {detail.roleTitle}</p>
             <p className="text-xs text-enrollaa-muted-light">Status: {detail.status}. Account last4 {detail.accountLast4 || "not stored"}.</p>
+            <p className="text-xs text-enrollaa-muted-light">Agreement: {detail.agreementStatus === "completed" ? "Completed with persisted acceptance evidence" : detail.agreementStatus === "pending" ? "Pending acceptance evidence" : "Unavailable"}.</p>
             {detail.reviewNote ? <p className="text-xs text-enrollaa-amber break-words">Note: {detail.reviewNote}</p> : null}
             <div className="flex flex-col gap-2">
               {(detail.documents ?? []).map((doc) => (
