@@ -172,20 +172,24 @@ export async function listReviewSubmissions(profile: TrustedProfile) {
   // Invitations are the authoritative roster. A submission is optional until an
   // intern saves their first draft, so reading from submissions alone hides both
   // "Not started" interns and draft records.
-  let query = db
+  let invitationQuery = db
     .from("staff_invitations")
-    .select("id, first_name, surname, email, role_title, status, created_at, department_id, departments(name), onboarding_submissions(id, status, created_at, updated_at, review_note, agreement_version_id, agreement_content_sha256, agreement_accepted_at)")
+    .select("id, first_name, surname, email, role_title, status, created_at, department_id, departments(name)")
     .not("status", "in", "(revoked,expired)")
     .order("created_at", { ascending: false });
   if (!isProgrammeWideRole(profile.role)) {
-    query = query.eq("department_id", requireDepartmentScope(profile, profile.department_id));
+    invitationQuery = invitationQuery.eq("department_id", requireDepartmentScope(profile, profile.department_id));
   }
-  const { data, error } = await query;
-  if (error) throw new DataAccessError("Unable to load onboarding submissions.", 500);
+  const [{ data, error }, { data: submissionData, error: submissionError }] = await Promise.all([
+    invitationQuery,
+    db.from("onboarding_submissions").select("id, staff_invitation_id, status, created_at, updated_at, review_note, agreement_version_id, agreement_content_sha256, agreement_accepted_at"),
+  ]);
+  if (error || submissionError) throw new DataAccessError("Unable to load onboarding submissions.", 500);
+  const submissionsByInvitation = new Map(
+    (submissionData ?? []).map((submission) => [submission.staff_invitation_id, submission]),
+  );
   return (data ?? []).map((row) => {
-    const submission = Array.isArray(row.onboarding_submissions)
-      ? row.onboarding_submissions[0]
-      : row.onboarding_submissions;
+    const submission = submissionsByInvitation.get(row.id);
     const onboardingStatus = submission?.status === "draft"
       ? "in_progress"
       : submission?.status ?? (row.status === "onboarding_started" ? "in_progress" : "not_started");
