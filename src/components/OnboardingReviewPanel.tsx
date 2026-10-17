@@ -8,6 +8,7 @@ import { asList, useLoadTicket } from "@/lib/use-load-ticket";
 
 type ReviewRow = {
   id: string;
+  submissionId: string | null;
   firstName: string;
   surname: string;
   email: string;
@@ -67,7 +68,9 @@ export function OnboardingReviewPanel() {
     setDetailError("");
     setNote("");
     try {
-      const response = await fetch(`/api/onboarding/review?id=${id}`, { cache: "no-store" });
+      const row = submissions.find((item) => item.id === id);
+      if (!row?.submissionId) return;
+      const response = await fetch(`/api/onboarding/review?id=${row.submissionId}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Unable to load this submission.");
       setDetail(data.submission);
@@ -80,12 +83,14 @@ export function OnboardingReviewPanel() {
 
   async function decide(decision: "approved" | "rejected") {
     if (!selectedId) return;
+    const selected = submissions.find((submission) => submission.id === selectedId);
+    if (!selected?.submissionId) return;
     setBusy(true);
     try {
       const response = await fetch("/api/onboarding/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ submissionId: selectedId, decision, note }),
+        body: JSON.stringify({ submissionId: selected.submissionId, decision, note }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Unable to record the review.");
@@ -113,6 +118,8 @@ export function OnboardingReviewPanel() {
       <TabBar
         tabs={[
           { id: "all", label: "All", count: submissions.length },
+          { id: "in_progress", label: "In progress", count: submissions.filter((submission) => submission.status === "in_progress" || submission.status === "draft").length },
+          { id: "not_started", label: "Not started", count: submissions.filter((submission) => submission.status === "not_started").length },
           { id: "submitted", label: "Awaiting review", count: submissions.filter((submission) => submission.status === "submitted").length },
           { id: "approved", label: "Approved", count: submissions.filter((submission) => submission.status === "approved").length },
           { id: "rejected", label: "Corrections", count: submissions.filter((submission) => submission.status === "rejected").length },
@@ -127,7 +134,7 @@ export function OnboardingReviewPanel() {
       ) : null}
       <div className="space-y-3 md:hidden">
         {filtered.map((submission) => (
-          <button key={submission.id} type="button" onClick={() => void openDetail(submission.id)} className="w-full glass-card p-3 text-left space-y-1 min-w-0">
+            <button key={submission.id} type="button" disabled={!submission.submissionId} onClick={() => void openDetail(submission.id)} className="w-full glass-card p-3 text-left space-y-1 min-w-0 disabled:cursor-default">
             <div className="flex justify-between gap-2">
               <span className="text-white text-sm font-medium break-words">{submission.firstName} {submission.surname}</span>
               <StatusBadge status={submission.status} />
@@ -141,7 +148,7 @@ export function OnboardingReviewPanel() {
         <div className="hidden md:block">
           <DataTable headers={["Person", "Email", "Department", "Role", "Submitted", "Status"]}>
             {filtered.map((submission) => (
-              <tr key={submission.id} className="cursor-pointer" onClick={() => void openDetail(submission.id)}>
+              <tr key={submission.id} className={submission.submissionId ? "cursor-pointer" : ""} onClick={() => void openDetail(submission.id)}>
                 <td className="table-cell break-anywhere font-medium text-white">{submission.firstName} {submission.surname}</td>
                 <td className="table-cell break-anywhere text-xs">{submission.email}</td>
                 <td className="table-cell"><span className="badge-muted">{submission.department}</span></td>

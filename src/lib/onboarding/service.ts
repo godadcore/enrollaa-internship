@@ -169,39 +169,53 @@ export async function listReviewSubmissions(profile: TrustedProfile) {
     throw new AuthorizationError("You do not have access to this resource.", 403);
   }
   const db = privilegedDatabase();
+  // Invitations are the authoritative roster. A submission is optional until an
+  // intern saves their first draft, so reading from submissions alone hides both
+  // "Not started" interns and draft records.
   let query = db
-    .from("onboarding_submissions")
-    .select("id, first_name, surname, email, role_title, status, created_at, updated_at, review_note, department_id, agreement_version_id, agreement_content_sha256, agreement_accepted_at, departments(name)")
-    .neq("status", "draft")
+    .from("staff_invitations")
+    .select("id, first_name, surname, email, role_title, status, created_at, department_id, departments(name), onboarding_submissions(id, status, created_at, updated_at, review_note, agreement_version_id, agreement_content_sha256, agreement_accepted_at)")
+    .not("status", "in", "(revoked,expired)")
     .order("created_at", { ascending: false });
   if (!isProgrammeWideRole(profile.role)) {
     query = query.eq("department_id", requireDepartmentScope(profile, profile.department_id));
   }
   const { data, error } = await query;
   if (error) throw new DataAccessError("Unable to load onboarding submissions.", 500);
-  return (data ?? []).map((row) => ({
+  return (data ?? []).map((row) => {
+    const submission = Array.isArray(row.onboarding_submissions)
+      ? row.onboarding_submissions[0]
+      : row.onboarding_submissions;
+    const onboardingStatus = submission?.status === "draft"
+      ? "in_progress"
+      : submission?.status ?? (row.status === "onboarding_started" ? "in_progress" : "not_started");
+    return {
+    // Keep the invitation id as the stable list key. submissionId is nullable for
+    // not-started interns and is the only id accepted by review/detail endpoints.
     id: row.id,
+    submissionId: submission?.id ?? null,
     firstName: row.first_name,
     surname: row.surname,
     email: row.email,
     roleTitle: row.role_title,
-    status: row.status,
-    submittedAt: row.created_at,
-    updatedAt: row.updated_at,
-    reviewNote: row.review_note,
+    status: onboardingStatus,
+    submittedAt: submission?.created_at ?? row.created_at,
+    updatedAt: submission?.updated_at ?? row.created_at,
+    reviewNote: submission?.review_note ?? null,
     agreementStatus:
-      row.agreement_version_id && row.agreement_accepted_at && typeof row.agreement_content_sha256 === "string" && /^[a-f0-9]{64}$/i.test(row.agreement_content_sha256)
+      submission?.agreement_version_id && submission?.agreement_accepted_at && typeof submission?.agreement_content_sha256 === "string" && /^[a-f0-9]{64}$/i.test(submission.agreement_content_sha256)
         ? "completed"
         : "pending",
     department:
       (Array.isArray(row.departments) ? row.departments[0]?.name : (row.departments as { name?: string } | null)?.name) ??
       "Unavailable",
-  }));
+    };
+  });
 }
 
 export async function getReviewSubmission(profile: TrustedProfile, submissionId: string) {
   const rows = await listReviewSubmissions(profile);
-  const summary = rows.find((row) => row.id === submissionId);
+  const summary = rows.find((row) => row.submissionId === submissionId);
   if (!summary) throw new DataAccessError("Onboarding submission not found.", 404);
   const db = privilegedDatabase();
   const { data: documents } = await db
